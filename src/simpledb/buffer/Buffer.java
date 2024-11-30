@@ -2,6 +2,8 @@ package simpledb.buffer;
 
 import simpledb.file.*;
 import simpledb.log.LogMgr;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * An individual buffer. A databuffer wraps a page 
@@ -20,6 +22,7 @@ public class Buffer {
    private int pins = 0;
    private int txnum = -1;
    private int lsn = -1;
+   private List<Long> accessTimes = new ArrayList<>(); // Tracks last K unpin times
 
    public Buffer(FileMgr fm, LogMgr lm) {
       this.fm = fm;
@@ -31,11 +34,6 @@ public class Buffer {
       return contents;
    }
 
-   /**
-    * Returns a reference to the disk block
-    * allocated to the buffer.
-    * @return a reference to a disk block
-    */
    public BlockId block() {
       return blk;
    }
@@ -46,11 +44,6 @@ public class Buffer {
          this.lsn = lsn;
    }
 
-   /**
-    * Return true if the buffer is currently pinned
-    * (that is, if it has a nonzero pin count).
-    * @return true if the buffer is pinned
-    */
    public boolean isPinned() {
       return pins > 0;
    }
@@ -59,13 +52,6 @@ public class Buffer {
       return txnum;
    }
 
-   /**
-    * Reads the contents of the specified block into
-    * the contents of the buffer.
-    * If the buffer was dirty, then its previous contents
-    * are first written to disk.
-    * @param b a reference to the data block
-    */
    void assignToBlock(BlockId b) {
       flush();
       blk = b;
@@ -73,9 +59,6 @@ public class Buffer {
       pins = 0;
    }
    
-   /**
-    * Write the buffer to its disk block if it is dirty.
-    */
    void flush() {
       if (txnum >= 0) {
          lm.flush(lsn);
@@ -84,17 +67,25 @@ public class Buffer {
       }
    }
 
-   /**
-    * Increase the buffer's pin count.
-    */
    void pin() {
       pins++;
    }
 
-   /**
-    * Decrease the buffer's pin count.
-    */
    void unpin() {
       pins--;
+      if (pins == 0) {
+         recordAccessTime();
+      }
+   }
+
+   private void recordAccessTime() {
+      accessTimes.add(System.currentTimeMillis());
+      if (accessTimes.size() > 3) {
+         accessTimes.remove(0); // Maintain only the last 3 access times
+      }
+   }
+
+   public List<Long> getAccessTimes() {
+      return new ArrayList<>(accessTimes);
    }
 }
